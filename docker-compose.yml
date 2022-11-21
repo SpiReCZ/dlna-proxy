@@ -1,0 +1,10 @@
+version: '3.8'
+services:
+  dlna-proxy:
+    image: spirecz/dlna-proxy:latest
+    build: .
+    container_name: dlna-proxy
+    environment:
+      REMOTE_URL: http://127.0.0.1:50001/desc/device.xml
+    network_mode: host
+    restart: unless-stopped

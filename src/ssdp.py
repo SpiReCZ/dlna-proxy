@@ -57,7 +57,7 @@ class SSDPRemoteDevice:
         service_list = device.find('serviceList')
 
         self.udn = udn.text
-        
+
         self.targets.append(device_type.text)
 
         for service_type in service_list.iter('serviceType'):
@@ -141,6 +141,7 @@ class SSDPSearchRequestHandler:
     """
     Handles SSDP search requests targeted to a specific SSDP device.
     """
+
     def __init__(self, device, notification_interval=1800):
         self.ssdp_device = device
         self.ssdp_message = SSDPMessage(device)
@@ -176,6 +177,7 @@ class SSDPAdvertiser(threading.Thread):
     """
     Produces SSDP advertising events for a SSDP device at regular intervals.
     """
+
     def __init__(self, device, notification_interval=1800):
         super(SSDPAdvertiser, self).__init__()
 
@@ -264,6 +266,7 @@ class SSDPDelayedResponseQueue(threading.Thread):
             else:
                 # no events pending, so there is no timeout
                 return None
+
 
 class SSDPTroll(threading.Thread):
     def __init__(self, ssdp_device):
