@@ -1,20 +1,22 @@
-import signal
-import logging
 import heapq
+import logging
+import signal
 import threading
 import time
-import random
 import urllib.request
-import network
 import xml.etree.ElementTree as ET
+from turtle import st
+
+import network
 from http2 import HTTPMessage, HTTPRequest, HTTPResponse
 
 logger = logging.getLogger()
 
+
 class SSDPRemoteDevice:
-    '''
+    """
     Represents a SSDP device in a remote subnet.
-    '''
+    """
 
     def __init__(self, description_url):
         self.description_url = description_url
@@ -31,10 +33,10 @@ class SSDPRemoteDevice:
         self.extract_device_data(description_root)
 
     def retrieve_device_description(self):
-        def remove_namespace(doc, namespace):
+        def remove_namespace(doc: ET.Element, namespace):
             ns = u'{{{}}}'.format(namespace)
             nsl = len(ns)
-            for elem in doc.getiterator():
+            for elem in doc.iter():
                 if elem.tag.startswith(ns):
                     elem.tag = elem.tag[nsl:]
 
@@ -64,10 +66,11 @@ class SSDPRemoteDevice:
     def __str__(self):
         return '<SSDPRemoteDevice url={}, udn={}>'.format(self.description_url, self.udn)
 
+
 class SSDPMessage:
-    '''
+    """
     Creates messages for a specific SSDP device.
-    '''
+    """
 
     EXPIRY_FUDGE = 5
     SERVER_INFORMATION = 'Linux/2.6.15.2 UPnP/1.1 UPNPSPOOF/1.0'
@@ -120,16 +123,24 @@ class SSDPMessage:
             ('DATE', HTTPMessage.current_date()),
             ('EXT', ''),
             ('LOCATION', self.ssdp_device.description_url),
-            ('SERVER', SERVER_INFORMATION),
+            ('SERVER', self.SERVER_INFORMATION),
             ('USN', self.usn_for_target(target))
         ]
 
         return HTTPResponse(headers, code=200)
 
+
+def send_msearch_reply(source_address, response):
+    # TODO this should be posted to the outgoing network queue with delay=random.uniform(1, float(request['MX'])
+    network.send_unicast_message(source_address, response)
+
+    logger.info('Responded to M-SEARCH from %s: %r', network.pretty_sockaddr(source_address), response)
+
+
 class SSDPSearchRequestHandler:
-    '''
+    """
     Handles SSDP search requests targeted to a specific SSDP device.
-    '''
+    """
     def __init__(self, device, notification_interval=1800):
         self.ssdp_device = device
         self.ssdp_message = SSDPMessage(device)
@@ -144,6 +155,7 @@ class SSDPSearchRequestHandler:
 
         search_target = request['st']
 
+        search_targets = None
         if search_target in self.ssdp_device.targets:
             search_targets = [search_target]
         elif search_target == 'ssdp:all':
@@ -152,22 +164,18 @@ class SSDPSearchRequestHandler:
             logger.info('Ignoring M-SEARCH for %r from %s', st, source_address)
             sts = []
 
-        for target in search_targets:
-            # respond at a random time between 1 and MX seconds from now
-            response = self.ssdp_message.msearch_response(target, self.notification_interval)
-            
-            send_msearch_reply(source_address, response)
+        if search_targets is not None:
+            for target in search_targets:
+                # respond at a random time between 1 and MX seconds from now
+                response = self.ssdp_message.msearch_response(target, self.notification_interval)
 
-    def send_msearch_reply(self, source_address, response):
-        # TODO this should be posted to the outgoing network queue with delay=random.uniform(1, float(request['MX'])
-        network.send_unicast_message(source_address, response)
+                send_msearch_reply(source_address, response)
 
-        logger.info('Responded to M-SEARCH from %s: %r', network.pretty_sockaddr(source_address), response)
 
 class SSDPAdvertiser(threading.Thread):
-    '''
+    """
     Produces SSDP advertising events for a SSDP device at regular intervals.
-    '''
+    """
     def __init__(self, device, notification_interval=1800):
         super(SSDPAdvertiser, self).__init__()
 
@@ -219,10 +227,11 @@ class SSDPAdvertiser(threading.Thread):
 
         logger.info('Sent SSDP byebye notifications')
 
+
 class SSDPDelayedResponseQueue(threading.Thread):
-    '''
+    """
     Sends delayed SSDP messages in a linear fashion.
-    '''
+    """
 
     def __init__(self):
         self.events = []
@@ -241,8 +250,8 @@ class SSDPDelayedResponseQueue(threading.Thread):
         heapq.heappush(self.events, (time.time() + delay, callback, args))
 
     def poll(self):
-        '''Execute any callbacks that are due, and return the time in seconds until the next event
-        will be ready, or None if there are none pending.'''
+        """Execute any callbacks that are due, and return the time in seconds until the next event
+        will be ready, or None if there are none pending."""
         while True:
             if self.events:
                 timeout = self.events[0][0] - time.time()

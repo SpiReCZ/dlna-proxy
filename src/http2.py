@@ -1,5 +1,11 @@
+import logging
+import time
 import urllib.parse
 import itertools
+from typing import Generator
+
+logger = logging.getLogger()
+
 
 class HTTPMessage:
     def __init__(self, first_line, headers, body):
@@ -8,7 +14,7 @@ class HTTPMessage:
         self.body = body
 
     def httpify_headers(self, headers):
-        '''Build HTTP headers string, including the trailing CRLF's for each header'''
+        """Build HTTP headers string, including the trailing CRLF's for each header"""
 
         def lines():
             for key, value in headers:
@@ -21,27 +27,36 @@ class HTTPMessage:
         return '\r\n'.join(itertools.chain(lines(), ['']))
 
     def to_bytes(self):
-        return(
-            self.first_line + '\r\n' +
-            self.httpify_headers(self.headers) + '\r\n'
-        ).encode('utf-8') + self.body
+        return (
+                       self.first_line + '\r\n' +
+                       self.httpify_headers(self.headers) + '\r\n'
+               ).encode('utf-8') + self.body
 
     @classmethod
     def max_age(cls, seconds):
-        '''Returns the max-age value for the HTTP CACHE-CONTROL header'''
+        """Returns the max-age value for the HTTP CACHE-CONTROL header"""
         return 'max-age={:d}'.format(seconds)
 
     @classmethod
     def current_date(cls):
-        '''Returns the current rfc1123 date for the HTTP Date header'''
+        """Returns the current rfc1123 date for the HTTP Date header"""
         return time.strftime('%a, %d %b %Y %H:%M:%S GMT', time.gmtime())
+
+
+def _parse_lines(buf: bytes) -> Generator:
+    for a in buf.split(b'\r\n'):
+        try:
+            yield a.decode('utf-8')
+        except:
+            logger.warning(f"Unable to decode {a}")
+
 
 class HTTPRequest:
     __slots__ = 'method', 'path', 'protocol', 'headers', 'body', 'query'
 
     def __init__(self, method, resource, headers=None, body=b''):
         self.method = method
-        
+
         split_result = urllib.parse.urlsplit(resource)
         self.query = urllib.parse.parse_qs(split_result.query)
         self.path = urllib.parse.unquote(split_result.path)
@@ -74,18 +89,19 @@ class HTTPRequest:
 
     @classmethod
     def from_bytes(cls, buf):
-        lines = (a.decode('utf-8') for a in buf.split(b'\r\n'))
+        lines = _parse_lines(buf)
 
         method, path, protocol = lines.__next__().split()
-        
+
         request = cls(method, path)
-        
+
         for h in lines:
             if h:
                 name, value = h.split(':', 1)
                 request[name] = value
 
         return request
+
 
 class HTTPResponse:
     from http.client import responses
